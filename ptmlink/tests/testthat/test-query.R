@@ -1,0 +1,42 @@
+# ptm_query over the fixture's Parquet: conditions pushed down, the default view after them, the one
+# sort key, provenance on the result. Skipped where arrow is not installed.
+test_that("ptm_query filters, sorts on evidence, applies the default view and carries provenance", {
+  testthat::skip_if_not_installed("arrow")
+  d <- ptmlink:::.ptm_write_fixture(parquet = TRUE); ptm_set_data_dir(d); assign("release_dir", NULL, envir = ptmlink:::.ptm_env)
+  withr::with_envvar(c(PTMLINK_RELEASE_DIR = ""), expect_error(ptm_query(list(list("q_value", "<", 1e-5))), "release directory"))
+  ptm_set_release_dir(file.path(d, "release"))               # verified against SHA256SUMS.json
+  expect_error(ptm_query(), "no condition")
+  q <- ptm_query(list(list("q_value", "<", 1e-5)))
+  expect_equal(q$phospho_site, c("COIL_T303", "VDAC2_S115", "SLC20A2_S256"))   # the two cis rows withheld by the view; sorted on evidence
+  expect_equal(attr(q, "n_matched"), 5L); expect_equal(unname(attr(q, "withheld")["cis"]), 2L)
+  expect_true(all(diff(q$evidence) <= 0)); expect_true(all(c("pair_id", "n_total") %in% names(q)))
+  expect_equal(q$pair_id[1:2], c("PTMG:P02786:N727|PTMP:P38432:T303", "PTMG:P00533:N196|PTMP:P45880:S115")); expect_equal(q$n_total, c(130L, 50L, 50L))
+  pv <- attr(q, "provenance"); expect_equal(pv$release, "fixture"); expect_match(pv$sorted_on, "evidence"); expect_equal(nchar(pv$sha256), 64L); expect_equal(pv$n_returned, 3L)
+  all6 <- ptm_query(list(list("k_cohorts", ">=", 1)), filters = modifyList(ptm_default_filters(), list(include_cis = TRUE)))
+  expect_equal(nrow(all6), 6L); expect_equal(all6$evidence[1], 51.0)
+  expect_equal(nrow(ptm_query(genes = "TFRC", filters = modifyList(ptm_default_filters(), list(include_cis = TRUE)))), 2L)
+  expect_equal(ptm_query(sites = "COIL_T303")$glyco_site, "TFRC_N727")
+  expect_equal(nrow(ptm_query(list(list("phospho_gene", "in", c("VDAC2", "COIL"))))), 2L)
+  expect_equal(nrow(ptm_query(list(list("phospho_gene", "not_in", c("VDAC2", "COIL")), list("is_cis", "==", FALSE)))), 2L)
+  expect_equal(nrow(ptm_query(list(list("rho_adjusted_lo", "not_na")))), 1L)
+  expect_equal(nrow(ptm_query(list(list("self_coupling", "is_na")), filters = modifyList(ptm_default_filters(), list(include_cis = TRUE)))), 1L)
+  lim <- ptm_query(list(list("evidence", ">", 0)), limit = 1L, columns = c("glyco_site", "phospho_site", "evidence"))
+  expect_equal(nrow(lim), 1L); expect_true(all(c("glyco_site", "evidence", "pair_id") %in% names(lim))); expect_false("rho_combined" %in% names(lim))
+  expect_error(ptm_query(list(list("nope", "<", 1))), "no column"); expect_error(ptm_query(list(list("evidence", "~", 1))), "operator")
+  expect_error(ptm_query(list(list("evidence", ">", c(1, 2)))), "one value")
+  expect_equal(nrow(ptm_query(allow_full = TRUE, filters = modifyList(ptm_default_filters(), list(include_cis = TRUE)))), 6L)
+})
+test_that("ptm_set_release_dir refuses a Parquet that does not match its checksum list", {
+  testthat::skip_if_not_installed("arrow")
+  d <- ptmlink:::.ptm_write_fixture(parquet = TRUE); rd <- file.path(d, "release")
+  sums <- jsonlite::fromJSON(file.path(rd, "SHA256SUMS.json")); sums[["site_served.parquet"]] <- strrep("0", 64)
+  writeLines(jsonlite::toJSON(sums, auto_unbox = TRUE, pretty = TRUE), file.path(rd, "SHA256SUMS.json"))
+  expect_error(ptm_set_release_dir(rd), "does not match")
+  expect_silent(ptm_set_release_dir(rd, verify = FALSE))
+})
+test_that("ptm_columns names every shard column and reads the Parquet types when a release is set", {
+  cols <- ptm_columns(); expect_true(all(c("evidence", "pair_id", "n_total") %in% cols$column)); expect_true(cols$in_shards[cols$column == "evidence"]); expect_false(cols$in_shards[cols$column == "pair_id"])
+  testthat::skip_if_not_installed("arrow")
+  d <- ptmlink:::.ptm_write_fixture(parquet = TRUE); ptm_set_release_dir(file.path(d, "release"), verify = FALSE)
+  cols <- ptm_columns(); expect_equal(cols$type[cols$column == "k_cohorts"], "int32"); expect_equal(cols$type[cols$column == "is_cis"], "bool")
+})

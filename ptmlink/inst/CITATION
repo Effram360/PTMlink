@@ -1,0 +1,19 @@
+citHeader("To cite PTMlink, the database and the package that reads it, use:")
+
+# Kept in step with ptm_cite(), which reads the same title, paper, version and address from
+# inst/extdata/ptmlink_citation.cff (a copy of the repository's CITATION.cff); the package's tests compare the two.
+# The entry cites the preprint by its title and DOI and carries no author list (the preprint gives it); the journal
+# article's reference replaces the preprint's when it exists.
+bibentry(
+  bibtype = "Misc",
+  key     = "ptmlink",
+  title   = "PTMlink: a database resource for co-variation of glycosylation and phosphorylation in human tumors",
+  howpublished = "bioRxiv",
+  year    = "2026",
+  doi     = "10.64898/2026.11.23.768710",
+  url     = "https://ptmlink.biomarkercenter.org/",
+  note    = "Preprint. PTMlink release v1.0.0, released 2026-11-24. Data CC BY 4.0, code MIT.",
+  textVersion = "PTMlink: a database resource for co-variation of glycosylation and phosphorylation in human tumors. bioRxiv, 2026. doi:10.64898/2026.11.23.768710. PTMlink release v1.0.0, released 2026-11-24, https://ptmlink.biomarkercenter.org/. Data CC BY 4.0, code MIT."
+)
+
+citFooter("With the citation, name the data release you used, as ptm_release()$release reports it.")

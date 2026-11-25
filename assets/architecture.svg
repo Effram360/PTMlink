@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="300" viewBox="0 0 1000 300" role="img" aria-labelledby="title desc">
+  <title id="title">PTMlink: from tumor profiles to site-pair associations</title>
+  <desc id="desc">Matched tumor profiles rank glycosite–phosphosite associations. Perturbation studies add separate support. Query the associations through the website, R package or MCP server. The line between the sites denotes association, not causal direction.</desc>
+  <style>
+    text { font-family:Arial,Helvetica,sans-serif; fill:#20282d; }
+    .label { font-size:20px; font-weight:600; }
+    .note { font-size:16px; fill:#59656d; }
+    .ink { fill:none; stroke:#20282d; stroke-width:3; stroke-linecap:round; stroke-linejoin:round; }
+  </style>
+  <rect width="1000" height="300" fill="#fff"/>
+
+  <!-- Paired measurements: identical columns represent matched samples. -->
+  <g transform="translate(74 62)">
+    <path d="M0 0V82M142 0V82" class="ink"/>
+    <g fill="#0072b2">
+      <rect x="14" y="10" width="18" height="24" opacity=".3"/>
+      <rect x="38" y="10" width="18" height="24" opacity=".6"/>
+      <rect x="62" y="10" width="18" height="24"/>
+      <rect x="86" y="10" width="18" height="24" opacity=".4"/>
+      <rect x="110" y="10" width="18" height="24" opacity=".8"/>
+    </g>
+    <g fill="#20282d">
+      <rect x="14" y="48" width="18" height="24" opacity=".4"/>
+      <rect x="38" y="48" width="18" height="24" opacity=".8"/>
+      <rect x="62" y="48" width="18" height="24" opacity=".6"/>
+      <rect x="86" y="48" width="18" height="24" opacity=".3"/>
+      <rect x="110" y="48" width="18" height="24"/>
+    </g>
+    <path d="M12 -10H130" stroke="#20282d" stroke-width="2"/>
+  </g>
+  <text x="145" y="182" text-anchor="middle" class="label">Tumor profiles</text>
+  <path d="M256 103H350M339 95L350 103L339 111" class="ink"/>
+
+  <!-- One undirected site pair, using the same square/circle motif as the website. -->
+  <path d="M434 103H578" stroke="#0072b2" stroke-width="5"/>
+  <rect x="382" y="77" width="52" height="52" fill="#fff" stroke="#0072b2" stroke-width="3"/>
+  <text x="408" y="113" text-anchor="middle" style="font-size:28px;font-weight:600;fill:#0072b2">N</text>
+  <circle cx="604" cy="103" r="26" fill="#fff" stroke="#20282d" stroke-width="3"/>
+  <text x="604" y="113" text-anchor="middle" style="font-size:28px;font-weight:600">P</text>
+  <text x="408" y="57" text-anchor="middle" class="note">Glycosite</text>
+  <text x="604" y="57" text-anchor="middle" class="note">Phosphosite</text>
+  <text x="506" y="182" text-anchor="middle" class="label">Site-pair associations</text>
+
+  <path d="M670 103H747M736 95L747 103L736 111" class="ink"/>
+  <path d="M782 61H770V145H782" class="ink"/>
+  <text x="800" y="68" class="label">Website</text>
+  <text x="800" y="110" class="label">R package</text>
+  <text x="800" y="152" class="label">MCP server</text>
+
+  <!-- Experimental support joins separately from the tumor ranking. -->
+  <g transform="translate(126 230)" class="ink">
+    <path d="M19-17C15-11 12-7 12-4a7 7 0 0 0 14 0c0-3-3-7-7-13Z" fill="#0072b2" stroke="none"/>
+    <ellipse cx="19" cy="16" rx="24" ry="8"/>
+    <path d="M-5 16v7c0 11 48 11 48 0v-7"/>
+    <path d="M9 16h1m9 3h1m8-5h1" stroke-width="4"/>
+  </g>
+  <text x="195" y="254" class="label">Perturbation studies</text>
+  <path d="M404 247H506V210" class="ink" stroke-dasharray="5 7"/>
+  <path d="M498 220L506 210L514 220" class="ink"/>
+  <text x="530" y="254" class="note">support</text>
+</svg>

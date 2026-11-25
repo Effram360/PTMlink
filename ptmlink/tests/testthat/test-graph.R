@@ -1,0 +1,52 @@
+# The graph functions on the fixture: one edge table from a network table, rows of reported pairs or a list; igraph,
+# the plot and the files where igraph is installed.
+test_that("the edge table has one shape from a network table, rows of reported pairs or a list", {
+  d <- ptmlink:::.ptm_write_fixture(parquet = FALSE); ptm_set_data_dir(d)
+  net <- ptm_network("EGFR")
+  t <- ptmlink:::.ptm_edge_table(net, "gene")
+  expect_equal(t$edges$from, c("EGFR", "EGFR", "EGFR")); expect_equal(t$edges$to, c("VDAC2", "SLC20A2", "ALG3")); expect_equal(t$edges$evidence, c(12.5, 10.9, 5.3))
+  expect_equal(t$edges$anchored, c(FALSE, FALSE, TRUE)); expect_equal(t$edges$sign, rep("positive", 3)); expect_equal(t$edges$glyco_site, c("EGFR_N196", "EGFR_N352", "EGFR_N603"))
+  expect_equal(t$nodes$name, c("EGFR", "VDAC2", "SLC20A2", "ALG3")); expect_equal(t$nodes$query, c(TRUE, FALSE, FALSE, FALSE)); expect_equal(t$nodes$n_edges, c(3L, 1L, 1L, 1L))
+  # two stacked networks give one edge per protein pair, the strongest kept
+  t2 <- ptmlink:::.ptm_edge_table(rbind(net, net), "gene"); expect_equal(nrow(t2$edges), 3L)
+  rows <- ptm_gene("EGFR", "glyco", modifyList(ptm_default_filters(), list(include_cis = TRUE)))
+  s <- ptmlink:::.ptm_edge_table(rows, "site")
+  expect_equal(nrow(s$edges), 4L); expect_equal(s$edges$from[1], "EGFR_N603"); expect_equal(s$edges$to[1], "EGFR_T693"); expect_equal(s$edges$pair_id[1], "PTMG:P00533:N603|PTMP:P00533:T693")
+  expect_equal(sort(unique(s$nodes$kind)), c("glycosite", "phosphosite")); expect_equal(s$nodes$gene[s$nodes$name == "VDAC2_S115"], "VDAC2"); expect_equal(s$level, "site")
+  g <- ptmlink:::.ptm_edge_table(rows, "gene"); expect_equal(nrow(g$edges), 4L); expect_equal(g$edges$n_site_pairs, rep(1L, 4)); expect_equal(g$edges$from[1], "EGFR"); expect_equal(g$edges$to[1], "EGFR")
+  expect_error(ptmlink:::.ptm_edge_table(net, "site"), "site level"); expect_error(ptmlink:::.ptm_edge_table(net[, 1:3], "gene"), "columns")
+  e <- ptmlink:::.ptm_edge_table(rows[0, ], "gene"); expect_equal(nrow(e$edges), 0L); expect_equal(names(e$edges)[1:2], c("from", "to")); expect_equal(nrow(e$nodes), 0L)
+})
+test_that("ptm_igraph, ptm_plot_network and ptm_write_network agree with the edge table", {
+  d <- ptmlink:::.ptm_write_fixture(parquet = FALSE); ptm_set_data_dir(d)
+  net <- ptm_network("EGFR"); rows <- ptm_gene("EGFR", "glyco")
+  stem <- tempfile("net_"); p <- ptm_write_network(net, stem); expect_true(all(file.exists(p)))
+  e <- utils::read.delim(p[["edges"]], stringsAsFactors = FALSE); expect_equal(nrow(e), 3L); expect_equal(names(e)[1:2], c("from", "to")); expect_equal(e$evidence, c(12.5, 10.9, 5.3))
+  n <- utils::read.delim(p[["nodes"]], stringsAsFactors = FALSE); expect_equal(n$name, c("EGFR", "VDAC2", "SLC20A2", "ALG3")); expect_equal(n$query, c(TRUE, FALSE, FALSE, FALSE))
+  testthat::skip_if_not_installed("igraph")
+  g <- ptm_igraph(net)
+  expect_equal(igraph::vcount(g), 4L); expect_equal(igraph::ecount(g), 3L); expect_false(igraph::is_directed(g)); expect_equal(igraph::graph_attr(g, "level"), "gene")
+  expect_equal(igraph::E(g)$evidence, c(12.5, 10.9, 5.3)); expect_equal(igraph::V(g)$query, c(TRUE, FALSE, FALSE, FALSE)); expect_equal(igraph::E(g)$anchored, c(FALSE, FALSE, TRUE))
+  gs <- ptm_igraph(rows, level = "site"); expect_equal(igraph::vcount(gs), 6L); expect_equal(sort(unique(igraph::V(gs)$kind)), c("glycosite", "phosphosite"))
+  f <- tempfile(fileext = ".pdf"); grDevices::pdf(f); on.exit({ grDevices::dev.off(); unlink(f) }, add = TRUE)
+  expect_invisible(ptm_plot_network(net)); expect_s3_class(ptm_plot_network(rows, level = "site"), "igraph"); expect_s3_class(ptm_plot_network(g, main = "given"), "igraph")
+  expect_error(ptm_plot_network(rows[0, ]), "no link to draw")
+  gm <- ptm_write_network(net, stem, format = "graphml"); expect_true(file.exists(gm)); expect_equal(igraph::ecount(igraph::read_graph(gm, format = "graphml")), 3L)
+})
+
+
+test_that("a network table is drawn at the partners it marks, and any drawing at its strongest links", {
+  testthat::skip_if_not_installed("igraph")
+  d <- ptmlink:::.ptm_write_fixture(parquet = FALSE); ptm_set_data_dir(d)
+  net <- ptm_network("EGFR", top_n = 1L)
+  expect_gt(nrow(net), 1L); expect_equal(sum(net$drawn), 1L)
+  f <- tempfile(fileext = ".pdf"); grDevices::pdf(f); on.exit({ grDevices::dev.off(); unlink(f) })
+  expect_message(g <- ptm_plot_network(net), "Drawing the 1 strongest of [0-9]+ partner links \\(top_n\\)")
+  expect_equal(igraph::ecount(g), 1L)
+  expect_equal(igraph::ecount(ptm_igraph(net)), nrow(net))                                        # the graph itself keeps every link
+  all_drawn <- ptm_network("EGFR", top_n = NULL)
+  expect_message(g2 <- ptm_plot_network(all_drawn, max_edges = 2L), "Drawing the 2 strongest of [0-9]+ links")
+  expect_equal(igraph::ecount(g2), 2L); expect_equal(sort(igraph::edge_attr(g2, "evidence"), decreasing = TRUE), sort(all_drawn$evidence_best, decreasing = TRUE)[1:2])
+  expect_silent(g3 <- ptm_plot_network(all_drawn, max_edges = NULL)); expect_equal(igraph::ecount(g3), nrow(all_drawn))
+  expect_error(ptm_plot_network(all_drawn, max_edges = 0), "max_edges is a whole number")
+})

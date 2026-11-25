@@ -1,0 +1,140 @@
+cff-version: 1.2.0
+message: >-
+  If you use PTMlink, please cite the preprint below and name the data release
+  you used. The journal article's reference and the archive DOI are added to
+  this file when they exist.
+title: "PTMlink: a database resource for co-variation of glycosylation and phosphorylation in human tumors"
+type: dataset
+version: 1.0.0
+date-released: 2026-11-24
+url: "https://ptmlink.biomarkercenter.org/"
+repository-code: "https://github.com/Effram360/PTMlink"
+license:
+  - MIT
+  - CC-BY-4.0
+abstract: >-
+  PTMlink scores pairs of an N-linked glycosylation site and a phosphorylation
+  site measured in the same tumors by their co-variation across twelve CPTAC
+  tumor cohorts: a covariate-adjusted partial Spearman correlation within each
+  cohort, combined across cohorts by fixed-effect meta-analysis, with each
+  cohort's estimate, normal adjacent tissue where it was measured, annotations
+  of shared protein abundance and tissue composition, and perturbation
+  evidence from three studies that altered N-glycosylation in human cells.
+keywords:
+  - glycosylation
+  - phosphorylation
+  - post-translational modification
+  - CPTAC
+  - proteomics
+  - co-variation
+  - database
+authors:
+  - family-names: Wei
+    given-names: Effram
+    affiliation: "Department of Chemical and Biomolecular Engineering and Department of Pathology, Johns Hopkins University"
+  - family-names: Liu
+    given-names: Hongyi
+    affiliation: "Department of Pathology, Johns Hopkins University"
+  - family-names: Hu
+    given-names: Yingwei
+    affiliation: "Department of Pathology, Johns Hopkins University"
+  - family-names: Sun
+    given-names: Zhenyu
+    affiliation: "Department of Pathology, Johns Hopkins University"
+  - family-names: Betenbaugh
+    given-names: Michael J.
+    affiliation: "Department of Chemical and Biomolecular Engineering, Johns Hopkins University"
+  - family-names: Zhang
+    given-names: Hui
+    email: huizhang@jhu.edu
+    affiliation: "Department of Chemical and Biomolecular Engineering and Department of Pathology, Johns Hopkins University"
+preferred-citation:
+  type: article
+  title: "PTMlink: a database resource for co-variation of glycosylation and phosphorylation in human tumors"
+  authors:
+    - family-names: Wei
+      given-names: Effram
+      affiliation: "Department of Chemical and Biomolecular Engineering and Department of Pathology, Johns Hopkins University"
+    - family-names: Liu
+      given-names: Hongyi
+      affiliation: "Department of Pathology, Johns Hopkins University"
+    - family-names: Hu
+      given-names: Yingwei
+      affiliation: "Department of Pathology, Johns Hopkins University"
+    - family-names: Sun
+      given-names: Zhenyu
+      affiliation: "Department of Pathology, Johns Hopkins University"
+    - family-names: Betenbaugh
+      given-names: Michael J.
+      affiliation: "Department of Chemical and Biomolecular Engineering, Johns Hopkins University"
+    - family-names: Zhang
+      given-names: Hui
+      email: huizhang@jhu.edu
+      affiliation: "Department of Chemical and Biomolecular Engineering and Department of Pathology, Johns Hopkins University"
+  journal: "bioRxiv"
+  year: 2026
+  doi: "10.64898/2026.11.23.768710"
+  url: "https://www.biorxiv.org/content/10.64898/2026.11.23.768710v1"
+  status: preprint
+references:
+  - type: data
+    title: "CPTAC pan-cancer harmonized data release, Proteomic Data Commons release 2021-04-29"
+    authors:
+      - name: "Clinical Proteomic Tumor Analysis Consortium"
+    url: "https://pdc.cancer.gov"
+  - type: article
+    title: "Characterizing the Effects of Protein Glycosylation Perturbation on Phosphorylation Signaling"
+    authors:
+      - family-names: Wei
+        given-names: Effram
+      - family-names: Liu
+        given-names: Hongyi
+      - family-names: Betenbaugh
+        given-names: Michael
+      - family-names: Zhang
+        given-names: Hui
+    journal: "Analytical Chemistry"
+    volume: 98
+    issue: 25
+    start: 18577
+    end: 18595
+    year: 2026
+    doi: "10.1021/acs.analchem.6c00790"
+  - type: article
+    title: "Dose-Dependent Inhibition of Protein Glycosylation Reveals Crosstalk between Glycosylation and Phosphorylation in EGF Signaling Pathways"
+    authors:
+      - family-names: Liu
+        given-names: Hongyi
+      - family-names: Lin
+        given-names: "Ding Chiao"
+      - family-names: Hu
+        given-names: Yingwei
+      - family-names: Sun
+        given-names: Zhenyu
+      - family-names: Huang
+        given-names: Yuanyu
+      - family-names: Xu
+        given-names: Yuanwei
+      - family-names: Zhang
+        given-names: Hui
+    journal: "Analytical Chemistry"
+    volume: 98
+    issue: 12
+    start: 9293
+    end: 9304
+    year: 2026
+    doi: "10.1021/acs.analchem.5c08113"
+  - type: unpublished
+    title: "Attenuation of EGFR-Mediated Cellular Signaling by Sialidase-Mediated Desialylation"
+    authors:
+      - family-names: Liu
+        given-names: Hongyi
+      - family-names: Wei
+        given-names: Effram
+      - family-names: Lin
+        given-names: "Ding Chiao"
+      - family-names: Zhang
+        given-names: Hui
+    year: 2026
+    doi: "10.21203/rs.3.rs-10144726/v1"
+    notes: "Research Square preprint"

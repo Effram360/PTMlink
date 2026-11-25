@@ -1,0 +1,28 @@
+Package: ptmlink
+Title: Query PTMlink, a Database of Glycosite-Phosphosite Co-Variation in Human Tumors
+Version: 1.0.0
+Authors@R: person("Effram", "Wei", email = "ewei6@jh.edu", role = c("aut", "cre"))
+Description: Reads the PTMlink release: pairs of an N-linked glycosylation site and a
+    phosphorylation site ranked by cross-cohort co-variation over the release's CPTAC tumor
+    cohorts (listed with their count by ptm_cohorts()), with a composition-adjusted correlation,
+    stable site and pair identifiers and a per-cohort breakdown on every reported pair. The
+    package reads the same per-gene data files the website reads, from a local copy or on
+    demand from the website with checksum verification, and follows the website's default
+    view (total evidence sorts; same-protein pairs hidden with their count; at least two
+    cohorts; the adjusted, parent-protein and self-coupling annotations displayed and
+    filterable, never sortable). Whole-database questions run over the released Parquet table
+    through 'arrow'; the reading rules on any pair are returned as typed fields; every reported
+    site is listed with its identifier, canonical position and AlphaFold position; a
+    machine-readable reference describes every function, column and rule. Installs and checks
+    without the release present.
+License: MIT + file LICENSE
+URL: https://ptmlink.biomarkercenter.org/, https://github.com/Effram360/PTMlink
+BugReports: https://github.com/Effram360/PTMlink/issues
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Depends: R (>= 4.5)
+Imports: jsonlite, utils, tools, stats
+Suggests: arrow, igraph, testthat (>= 3.0.0), knitr, rmarkdown, withr
+VignetteBuilder: knitr
+Config/testthat/edition: 3

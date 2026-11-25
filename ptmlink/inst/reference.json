@@ -1,0 +1,1616 @@
+{
+  "package": "ptmlink",
+  "version": "1.0.0",
+  "purpose": "Read the PTMlink release: pairs of an N-linked glycosylation site and a phosphorylation site ranked by their co-variation across the release's CPTAC tumor cohorts (ptm_cohorts() lists them; normal adjacent tissue (NAT) cohorts are view-only and never pooled), with perturbation evidence, identifiers, a per-cohort breakdown and the reading rules on every reported pair. The package does not refit the underlying tumor associations; it calculates interval summaries and list statistics. NAT estimates and cohort-against-background comparisons are website features, outside the current pair response.",
+  "release_contract": {
+    "ranking": "Evidence (-log10 P) is the only sort key. Under inference_revision student_normal_bh it combines signed Student-to-normal cohort scores; earlier internal builds without the marker used Fisher-normal evidence. The pooled rho remains a Fisher-weighted effect. Sensitivity estimates are annotations, not alternate rankings.",
+    "direction": "The correlation is symmetric. No row, edge or rule licenses a direction; direction can come only from a designed perturbation.",
+    "perturbation": "Perturbation evidence admits a pair to the reported pairs and never enters the score.",
+    "default_view": "Same-protein pairs hidden; at least two cohorts; q_value < 0.05 (Benjamini-Hochberg, the only correction). To read the whole reported tier (q_value < 0.05 or perturbation evidence), set significant_only=FALSE, min_k=1 and include_cis=TRUE, with other filters reset.",
+    "data_sources": "Per-gene shards (a local web/data directory or checksum-verified download) for one gene, site or pair at a time; the released site_served.parquet (a local release directory) for questions over every reported pair.",
+    "precision": "Numbers in the shards are rounded to six decimals (q and p to seven significant digits; self_* to three decimals); the Parquet carries full precision.",
+    "inference": "Read inference metadata in build.json/shards or versions.tsv: student_normal_bh uses Student tails with Benjamini-Hochberg q_value and q_value_anchored, the only correction; earlier internal builds without the marker used Fisher-normal evidence with BH. The site, glycoform and perturbation-admitted subset are separate correction families."
+  },
+  "rules": [
+    {
+      "id": "direction",
+      "field": null,
+      "comparator": "always",
+      "threshold": null,
+      "filter": null,
+      "statement": "The correlation is symmetric: the row states that the two sites co-vary across tumors, not that one regulates the other."
+    },
+    {
+      "id": "significance",
+      "field": "q_value",
+      "comparator": "<",
+      "threshold": 0.05,
+      "filter": "significant_only",
+      "statement": "Significant: q < 0.05 after Benjamini-Hochberg correction over every scored site pair, the only correction applied."
+    },
+    {
+      "id": "perturbation",
+      "field": [
+        "anch_any",
+        "anch_dose",
+        "anch_gene_editing",
+        "anch_enzymatic"
+      ],
+      "comparator": "is_true",
+      "threshold": true,
+      "filter": "anchored_only",
+      "statement": "Admitted by a perturbation study. Dose-response measured the pair together; gene editing and sialidase paired two lists of responding sites. Perturbation evidence admits a pair and never raises its rank."
+    },
+    {
+      "id": "same_protein",
+      "field": "is_cis",
+      "comparator": "is_true",
+      "threshold": true,
+      "filter": "include_cis",
+      "statement": "Both sites sit on one protein and share its abundance, so they correlate under no coupling at all; same-protein pairs reach significance about ten times as often as cross-protein pairs. Read as shared abundance first."
+    },
+    {
+      "id": "protein_shadow",
+      "field": "rho_prot",
+      "comparator": "abs>=",
+      "threshold": 0.15,
+      "filter": "shadow_clean_only",
+      "statement": "The two parent proteins co-vary in abundance; proteins that rise and fall together make their sites co-vary for reasons outside the sites."
+    },
+    {
+      "id": "self_coupling",
+      "field": [
+        "self_coupling",
+        "self_glyco",
+        "self_phospho"
+      ],
+      "comparator": ">=",
+      "threshold": 0.6,
+      "filter": "hide_self_coupled",
+      "statement": "One side follows its own protein's abundance: an abundance observation before a site observation."
+    },
+    {
+      "id": "tissue_composition",
+      "field": [
+        "glyco_programs",
+        "phospho_programs",
+        "rep_glycans"
+      ],
+      "comparator": "is_true",
+      "threshold": true,
+      "filter": "hide_composition",
+      "statement": "Both sites carry a tissue-program label (their intensities track a tissue-composition score), so the pair can co-vary through tissue composition alone."
+    },
+    {
+      "id": "depth",
+      "field": [
+        "evidence_pctile_k",
+        "k_cohorts"
+      ],
+      "comparator": "informational",
+      "threshold": null,
+      "filter": null,
+      "statement": "Evidence grows with the number of tumors as well as with the size of the correlation; compare pairs at the same cohort count through evidence_pctile_k."
+    },
+    {
+      "id": "heterogeneity",
+      "field": [
+        "I2",
+        "k_cohorts"
+      ],
+      "comparator": ">",
+      "threshold": 0.5,
+      "filter": "max_i2",
+      "statement": "The cohorts disagree beyond sampling noise: the pooled rho is not a common effect across them (the website offers a ceiling of 0.5)."
+    },
+    {
+      "id": "one_cohort",
+      "field": "k_cohorts",
+      "comparator": "==",
+      "threshold": 1,
+      "filter": "min_k",
+      "statement": "Measured in one cohort only: no heterogeneity or leave-one-cohort-out reading exists, and the default view hides such pairs."
+    },
+    {
+      "id": "without_one_cohort",
+      "field": [
+        "loco_pctile_k",
+        "evidence_loco_min",
+        "cohort_max_influence"
+      ],
+      "comparator": "informational",
+      "threshold": null,
+      "filter": "min_loco_pctile",
+      "statement": "How much of the evidence remains when the most influential cohort is left out, as a percentile among reported pairs measured in the same number of cohorts."
+    },
+    {
+      "id": "adjusted",
+      "field": [
+        "rho_adjusted_lo",
+        "rho_adjusted_hi"
+      ],
+      "comparator": "is_true",
+      "threshold": true,
+      "filter": "adjusted_excludes_zero",
+      "statement": "The composition-adjusted interval excludes zero. The adjusted score is an annotation, never a ranking, and carries no false-discovery rate."
+    },
+    {
+      "id": "glycoform_pooling",
+      "field": [
+        "n_rep_glycans",
+        "rep_glycans"
+      ],
+      "comparator": ">",
+      "threshold": 1,
+      "filter": null,
+      "statement": "The site-level correlation pools different representative glycoforms across cohorts; a glycan-specific statement needs the glycoform layer (ptm_pair()$glycoforms)."
+    },
+    {
+      "id": "sequon_ambiguity",
+      "field": "glyco_site_ambiguous",
+      "comparator": "is_true",
+      "threshold": true,
+      "filter": null,
+      "statement": "The glycosite's peptide carried more than one sequon; the label names the first and is an attribution, not a measurement."
+    }
+  ],
+  "functions": [
+    {
+      "name": "ptm_set_data_dir",
+      "purpose": "Point the package at a local copy of the website's data directory (the per-gene shards).",
+      "args": [
+        {
+          "name": "path",
+          "type": "character(1)",
+          "meaning": "directory holding index.json.gz, genes/, cohorts.json, build.json"
+        }
+      ],
+      "returns": {
+        "type": "character(1), invisibly",
+        "columns": []
+      },
+      "tool": false
+    },
+    {
+      "name": "ptm_set_data_url",
+      "purpose": "Point the package at the release's data address; each file is downloaded on first use and verified against SHA256SUMS.json or refused.",
+      "args": [
+        {
+          "name": "url",
+          "type": "character(1)",
+          "meaning": "the address that serves index.json.gz, genes/, SHA256SUMS.json"
+        }
+      ],
+      "returns": {
+        "type": "character(1), invisibly",
+        "columns": []
+      },
+      "tool": false
+    },
+    {
+      "name": "ptm_set_release_dir",
+      "purpose": "Point the package at a local release directory (site_served.parquet and its sidecars) for ptm_query() and complete identifiers.",
+      "args": [
+        {
+          "name": "path",
+          "type": "character(1)",
+          "meaning": "directory holding site_served.parquet, SHA256SUMS.json, versions.tsv, features_glyco.tsv, features_phospho.tsv, CITATION.cff"
+        },
+        {
+          "name": "verify",
+          "type": "logical(1)",
+          "default": true,
+          "meaning": "check the Parquet against SHA256SUMS.json now; a mismatch is an error"
+        }
+      ],
+      "returns": {
+        "type": "character(1), invisibly",
+        "columns": []
+      },
+      "tool": false
+    },
+    {
+      "name": "ptm_release",
+      "purpose": "The build stamp of the data source in use.",
+      "args": [],
+      "returns": {
+        "type": "a record of the release: its label and dates, its counts and its method",
+        "columns": [
+          {
+            "name": "release"
+          },
+          {
+            "name": "built_utc"
+          },
+          {
+            "name": "n_served_rows"
+          },
+          {
+            "name": "n_served_anchored"
+          },
+          {
+            "name": "has_structure"
+          }
+        ]
+      },
+      "tool": true,
+      "rows": false
+    },
+    {
+      "name": "ptm_cohorts",
+      "purpose": "The cohort dictionary.",
+      "args": [],
+      "returns": {
+        "type": "a table, one row per cohort",
+        "columns": [
+          {
+            "name": "cohort",
+            "meaning": "the analysis key the release files and every argument use (STAD for the gastric cohort)"
+          },
+          {
+            "name": "label",
+            "meaning": "the article's display name: GC for STAD, ccRCC for CCRCC, Rare kidney cancers for RARE_KIDNEY"
+          },
+          {
+            "name": "tumour_type"
+          }
+        ]
+      },
+      "tool": true,
+      "rows": false
+    },
+    {
+      "name": "ptm_glycans",
+      "purpose": "The glycan composition table.",
+      "args": [],
+      "returns": {
+        "type": "a table, one row per glycan composition, the most often measured first",
+        "columns": [
+          {
+            "name": "composition"
+          },
+          {
+            "name": "glycan_class"
+          }
+        ]
+      },
+      "tool": true,
+      "rows": true
+    },
+    {
+      "name": "ptm_default_filters",
+      "purpose": "The default view as the website applies it; modify with modifyList().",
+      "args": [],
+      "returns": {
+        "type": "named list",
+        "columns": [
+          {
+            "name": "include_cis",
+            "meaning": "FALSE: same-protein pairs hidden with their count"
+          },
+          {
+            "name": "min_k",
+            "meaning": "2: at least two cohorts"
+          },
+          {
+            "name": "hide_composition",
+            "meaning": "drop pairs labeled on both sites"
+          },
+          {
+            "name": "anchored_only",
+            "meaning": "keep only perturbation-admitted pairs"
+          },
+          {
+            "name": "significant_only",
+            "meaning": "keep only q < 0.05"
+          },
+          {
+            "name": "max_i2",
+            "meaning": "an optional I2 ceiling; NA applies none"
+          },
+          {
+            "name": "adjusted_excludes_zero",
+            "meaning": "keep pairs whose adjusted interval excludes zero (a filter, never a sort)"
+          },
+          {
+            "name": "shadow_clean_only",
+            "meaning": "keep pairs whose parents do not co-vary; pairs with no shadow measured are withheld"
+          },
+          {
+            "name": "hide_self_coupled",
+            "meaning": "drop pairs whose stronger side tracks its own protein at >= 0.6; pairs with no value are kept"
+          },
+          {
+            "name": "min_loco_pctile",
+            "meaning": "an optional floor on loco_pctile_k; NA applies none"
+          }
+        ]
+      },
+      "tool": false
+    },
+    {
+      "name": "ptm_status",
+      "purpose": "Why a gene returns what it returns: the resolved symbol, how it resolved, the status word on each side and the counts behind it. The documented first call; works on the index alone.",
+      "args": [
+        {
+          "name": "gene",
+          "type": "character",
+          "meaning": "one or more symbols, aliases or UniProt accessions"
+        }
+      ],
+      "returns": {
+        "type": "a table, one row per query",
+        "columns": [
+          {
+            "name": "query"
+          },
+          {
+            "name": "gene"
+          },
+          {
+            "name": "resolved_via"
+          },
+          {
+            "name": "status_glyco"
+          },
+          {
+            "name": "status_phospho"
+          },
+          {
+            "name": "n_cohorts_glyco_detected"
+          },
+          {
+            "name": "n_cohorts_phospho_detected"
+          },
+          {
+            "name": "n_scored_rows_glyco"
+          },
+          {
+            "name": "n_scored_rows_phospho"
+          },
+          {
+            "name": "n_served_as_glyco"
+          },
+          {
+            "name": "n_served_as_phospho"
+          }
+        ]
+      },
+      "tool": true,
+      "rows": false
+    },
+    {
+      "name": "ptm_gene",
+      "purpose": "The ranked partners of a gene on one side, in the default view, sorted on evidence.",
+      "args": [
+        {
+          "name": "gene",
+          "type": "character",
+          "meaning": "one or more symbols, aliases or accessions; several are stacked with a query_gene column, and a name that is not recognized is said and skipped"
+        },
+        {
+          "name": "side",
+          "type": "character(1)",
+          "default": "glyco",
+          "meaning": "glyco: the gene's glycosites against every phosphosite; phospho: its phosphosites",
+          "enum": [
+            "glyco",
+            "phospho"
+          ]
+        },
+        {
+          "name": "filters",
+          "type": "list",
+          "default": "ptm_default_filters()",
+          "meaning": "the view"
+        }
+      ],
+      "returns": {
+        "type": "a table of reported pairs sorted on evidence, with the counts the filters hid (withheld)",
+        "columns": [
+          {
+            "name": "reported row columns (ptm_columns())"
+          },
+          {
+            "name": "n_total"
+          },
+          {
+            "name": "glyco_row_id"
+          },
+          {
+            "name": "phospho_row_id"
+          },
+          {
+            "name": "pair_id"
+          }
+        ]
+      },
+      "tool": true,
+      "rows": true,
+      "ranked": true
+    },
+    {
+      "name": "ptm_site",
+      "purpose": "The partners of one or more sites, in the default view, sorted on evidence.",
+      "args": [
+        {
+          "name": "site",
+          "type": "character",
+          "meaning": "site keys such as EGFR_N603 or EGFR_T693; several are stacked with a query_site column, and a site in no reported pair is said and skipped"
+        },
+        {
+          "name": "filters",
+          "type": "list",
+          "default": "ptm_default_filters()",
+          "meaning": "the view"
+        }
+      ],
+      "returns": {
+        "type": "a table of reported pairs sorted on evidence, with the counts the filters hid (withheld)",
+        "columns": [
+          {
+            "name": "reported row columns (ptm_columns())"
+          },
+          {
+            "name": "n_total"
+          },
+          {
+            "name": "glyco_row_id"
+          },
+          {
+            "name": "phospho_row_id"
+          },
+          {
+            "name": "pair_id"
+          }
+        ]
+      },
+      "tool": true,
+      "rows": true,
+      "ranked": true
+    },
+    {
+      "name": "ptm_pair",
+      "purpose": "One or more pairs with the reported row, the per-cohort breakdown with intervals, the representative glycoforms and the glycoform layer.",
+      "args": [
+        {
+          "name": "glyco_site",
+          "type": "character",
+          "meaning": "glycosite keys (IL6ST_N131), or pair_ids (PTMG:P40189:N131|PTMP:Q9H3N1:S270) with phospho_site omitted"
+        },
+        {
+          "name": "phospho_site",
+          "type": "character",
+          "default": null,
+          "meaning": "phosphosite keys, recycled to the same length; omitted when glyco_site gives pair_ids"
+        }
+      ],
+      "returns": {
+        "type": "a record: row, cohorts, n_total, rep_glycans, glycoforms, note; a pair that is not reported is said as such",
+        "columns": [
+          {
+            "name": "cohorts",
+            "meaning": "cohort, label, rho, n, lo, hi (the 95 % interval on the Fisher-z scale at the cohort's weight n - 3 - k_cov, to four decimals) and k_cov (the cohort's covariate count)"
+          },
+          {
+            "name": "rep_glycans",
+            "meaning": "cohort, rep_glycan"
+          },
+          {
+            "name": "glycoforms",
+            "meaning": "glycan, rho, evidence, k (the number of cohorts), I2, q (the glycoform layer's own FDR), anchored"
+          }
+        ]
+      },
+      "tool": true,
+      "rows": false
+    },
+    {
+      "name": "ptm_network",
+      "purpose": "The one-hop network of a gene: one edge per partner gene and side, the best site pair's numbers on each edge, the same table the website draws.",
+      "args": [
+        {
+          "name": "gene",
+          "type": "character(1)",
+          "meaning": "one symbol, alias or accession"
+        },
+        {
+          "name": "filters",
+          "type": "list",
+          "default": "ptm_default_filters()",
+          "meaning": "the view"
+        },
+        {
+          "name": "top_n",
+          "type": "integer(1)",
+          "default": 25,
+          "meaning": "the website's node cap: the partners marked in the drawn column, the strongest first; null marks every partner",
+          "nullable": true
+        },
+        {
+          "name": "pin",
+          "type": "character",
+          "default": "character(0)",
+          "meaning": "partners drawn in addition to the cap"
+        }
+      ],
+      "returns": {
+        "type": "a table, one row per partner protein and side, sorted on evidence_best",
+        "columns": [
+          {
+            "name": "partner"
+          },
+          {
+            "name": "role"
+          },
+          {
+            "name": "rank"
+          },
+          {
+            "name": "drawn"
+          },
+          {
+            "name": "n_site_pairs"
+          },
+          {
+            "name": "evidence_best"
+          },
+          {
+            "name": "rho_at_best"
+          },
+          {
+            "name": "k_at_best"
+          },
+          {
+            "name": "n_at_best"
+          },
+          {
+            "name": "q_at_best"
+          },
+          {
+            "name": "rho_prot"
+          },
+          {
+            "name": "shadow_clean_at_best"
+          },
+          {
+            "name": "self_coupling_at_best"
+          },
+          {
+            "name": "anch_any"
+          },
+          {
+            "name": "best_glyco_site"
+          },
+          {
+            "name": "best_phospho_site"
+          }
+        ]
+      },
+      "tool": true,
+      "rows": true,
+      "ranked": true
+    },
+    {
+      "name": "ptm_query",
+      "purpose": "Every reported pair that meets typed conditions, read from site_served.parquet; sorted on evidence, the default view applied after the conditions, provenance attached. For the v1.0.0 release a call with narrow conditions takes about 10 seconds and about 5 GB of memory. Every pair the conditions match is read into memory before the view and the limit apply, so conditions that match more than one million pairs are refused unless allow_full is set.",
+      "args": [
+        {
+          "name": "where",
+          "type": "list of list(column, operator, value)",
+          "default": "list()",
+          "meaning": "conditions combined with AND; operators <, <=, >, >=, ==, !=, in, not_in, is_na, not_na; a value has its column's type (a number, true or false, or text)"
+        },
+        {
+          "name": "genes",
+          "type": "character",
+          "default": null,
+          "meaning": "keep pairs with one of these genes on either side; symbols, aliases or UniProt accessions"
+        },
+        {
+          "name": "sites",
+          "type": "character",
+          "default": null,
+          "meaning": "keep pairs with one of these sites on either side"
+        },
+        {
+          "name": "columns",
+          "type": "character",
+          "default": null,
+          "meaning": "the columns to return; identifiers and n_total are always added"
+        },
+        {
+          "name": "filters",
+          "type": "list",
+          "default": "ptm_default_filters()",
+          "meaning": "the view, applied after the conditions"
+        },
+        {
+          "name": "limit",
+          "type": "integer(1)",
+          "default": null,
+          "meaning": "at most this many rows from the top of the ranking; n_view keeps the number that passed"
+        },
+        {
+          "name": "allow_full",
+          "type": "logical(1)",
+          "default": false,
+          "meaning": "permit a query with no condition, or one whose conditions match more than one million pairs (minutes and tens of GB of memory)"
+        }
+      ],
+      "returns": {
+        "type": "a table of reported pairs sorted on evidence, with withheld, n_matched and provenance",
+        "columns": [
+          {
+            "name": "reported row columns (ptm_columns())"
+          },
+          {
+            "name": "n_total"
+          },
+          {
+            "name": "glyco_row_id"
+          },
+          {
+            "name": "phospho_row_id"
+          },
+          {
+            "name": "pair_id"
+          }
+        ]
+      },
+      "tool": true,
+      "rows": true,
+      "ranked": true
+    },
+    {
+      "name": "ptm_explain",
+      "purpose": "The reading rules on one or more pairs as typed fields: rule, field, value, threshold, whether it applies, and the sentence the website shows.",
+      "args": [
+        {
+          "name": "glyco_site",
+          "type": "character",
+          "default": null,
+          "meaning": "glycosite keys, or pair_ids with phospho_site omitted"
+        },
+        {
+          "name": "phospho_site",
+          "type": "character",
+          "default": null,
+          "meaning": "phosphosite keys; omitted when glyco_site gives pair_ids"
+        },
+        {
+          "name": "rows",
+          "type": "data.frame",
+          "default": null,
+          "meaning": "rows of reported pairs already in hand; then nothing is fetched",
+          "tool": false
+        }
+      ],
+      "returns": {
+        "type": "a table, one row per rule per pair",
+        "columns": [
+          {
+            "name": "glyco_site"
+          },
+          {
+            "name": "phospho_site"
+          },
+          {
+            "name": "pair_id"
+          },
+          {
+            "name": "rule"
+          },
+          {
+            "name": "field"
+          },
+          {
+            "name": "value"
+          },
+          {
+            "name": "threshold"
+          },
+          {
+            "name": "applies"
+          },
+          {
+            "name": "statement"
+          },
+          {
+            "name": "filter"
+          }
+        ]
+      },
+      "tool": true,
+      "rows": false
+    },
+    {
+      "name": "ptm_sites",
+      "purpose": "The reported sites of one or more proteins with their identifiers, canonical positions and, where the structure sidecar exists, the modeled alpha-carbon position and pLDDT.",
+      "args": [
+        {
+          "name": "x",
+          "type": "character",
+          "meaning": "symbols, aliases or accessions"
+        },
+        {
+          "name": "structure",
+          "type": "logical(1)",
+          "default": true,
+          "meaning": "read the structure sidecar when the data source carries it"
+        }
+      ],
+      "returns": {
+        "type": "a table, one row per reported site, in order along the protein",
+        "columns": [
+          {
+            "name": "query"
+          },
+          {
+            "name": "gene"
+          },
+          {
+            "name": "uniprot_acc"
+          },
+          {
+            "name": "side"
+          },
+          {
+            "name": "site"
+          },
+          {
+            "name": "row_id"
+          },
+          {
+            "name": "residue"
+          },
+          {
+            "name": "position_canonical"
+          },
+          {
+            "name": "residue_ok"
+          },
+          {
+            "name": "n_cohorts_served"
+          },
+          {
+            "name": "self_coupling_median"
+          },
+          {
+            "name": "window_15"
+          },
+          {
+            "name": "frame_offset"
+          },
+          {
+            "name": "topology_class"
+          },
+          {
+            "name": "glyco_site_ambiguous"
+          },
+          {
+            "name": "model"
+          },
+          {
+            "name": "model_coverage"
+          },
+          {
+            "name": "modelled"
+          },
+          {
+            "name": "model_residue"
+          },
+          {
+            "name": "residue_matches_model"
+          },
+          {
+            "name": "plddt"
+          },
+          {
+            "name": "x"
+          },
+          {
+            "name": "y"
+          },
+          {
+            "name": "z"
+          },
+          {
+            "name": "structure_status"
+          }
+        ]
+      },
+      "tool": true,
+      "rows": true
+    },
+    {
+      "name": "ptm_columns",
+      "purpose": "The columns of a reported row with their type and meaning.",
+      "args": [],
+      "returns": {
+        "type": "a table, one row per column",
+        "columns": [
+          {
+            "name": "column"
+          },
+          {
+            "name": "type"
+          },
+          {
+            "name": "meaning"
+          },
+          {
+            "name": "in_shards"
+          }
+        ]
+      },
+      "tool": true,
+      "rows": false
+    },
+    {
+      "name": "ptm_reference",
+      "purpose": "This reference as data (or as the JSON text).",
+      "args": [
+        {
+          "name": "as",
+          "type": "character(1)",
+          "default": "list",
+          "meaning": "list or json"
+        }
+      ],
+      "returns": {
+        "type": "the reference as a record, or as JSON text",
+        "columns": []
+      },
+      "tool": true,
+      "rows": false
+    },
+    {
+      "name": "ptm_cite",
+      "purpose": "How to cite the release in use, read from its CITATION.cff: the paper that describes the resource (its preprint until the article is published), and the resource's version, date and address.",
+      "args": [],
+      "returns": {
+        "type": "a record: title, version, date, license, doi, url, paper, the release in use and one citation line",
+        "columns": [
+          {
+            "name": "title"
+          },
+          {
+            "name": "version"
+          },
+          {
+            "name": "date"
+          },
+          {
+            "name": "license"
+          },
+          {
+            "name": "doi"
+          },
+          {
+            "name": "url"
+          },
+          {
+            "name": "paper",
+            "meaning": "the paper that describes the resource, when the citation file names one: journal, year, doi, url and status (preprint until the article is published)"
+          },
+          {
+            "name": "release"
+          },
+          {
+            "name": "text"
+          },
+          {
+            "name": "r_citation"
+          }
+        ]
+      },
+      "tool": true,
+      "rows": false
+    },
+    {
+      "name": "ptm_list",
+      "tool": true,
+      "rows": true,
+      "purpose": "A list of proteins or sites against the reported pairs. Auto level: protein for gene-only lists; otherwise site, with gene entries expanded to their reported sites and literal site entries preserved. Returns how each entry resolved and is covered; the pairs inside the list (internal), the same-protein pairs, and the pairs reaching out of it (neighborhood), all in the view; the ranked partner sites: sites outside the list reached by more members than their reach among all significant pairs predicts (one hypergeometric P per site, BH over every partner site; the fold; the strongest pair in the view), which answers which sites on the other side the list correlates with; the same test per partner protein (convergent); and whether the list holds more internal pairs than the members' own numbers of significant pairs predict (a degree-preserving expectation with a permutation P). The three tests count significant reported pairs (q_value < 0.05) between two different proteins; a pair reported only for its perturbation support is not counted.",
+      "args": [
+        {
+          "name": "x",
+          "type": "character",
+          "meaning": "gene symbols, aliases, UniProt accessions or site keys (GENE_N123, GENE_S123); an element may hold several entries separated by newlines, commas, semicolons or whitespace"
+        },
+        {
+          "name": "level",
+          "type": "character(1)",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "protein",
+            "site"
+          ],
+          "meaning": "auto: protein level for gene-only lists; otherwise site level, expanding gene entries to their reported sites; protein: site keys contribute their protein; site: every entry must be a site key"
+        },
+        {
+          "name": "filters",
+          "type": "list",
+          "default": "ptm_default_filters()",
+          "meaning": "the view applied to the row tables; the tests always count the significant pairs between two different proteins"
+        },
+        {
+          "name": "n_perm",
+          "type": "integer(1)",
+          "default": 200,
+          "meaning": "random degree-matched lists drawn for the connectivity P; 0 reports the expectation only"
+        },
+        {
+          "name": "seed",
+          "type": "integer(1)",
+          "default": 1,
+          "meaning": "the random seed for the permutation"
+        }
+      ],
+      "returns": {
+        "type": "a record: level, members, internal, same_protein, neighbourhood, partner_sites, convergent, connectivity, universe, composition, withheld, provenance, note",
+        "columns": [
+          {
+            "name": "members: query, kind, gene, resolved_via, site, side_named, status_glyco, status_phospho, n_served_as_glyco, n_served_as_phospho, n_internal, n_neighbourhood"
+          },
+          {
+            "name": "internal, same_protein, neighbourhood: reported row columns plus site_named_glyco, site_named_phospho"
+          },
+          {
+            "name": "partner_sites: site, gene, side, members_reached, members_testable, tier_reach, tier_n, fold, p, q, n_pairs, members, evidence_best, best_pair_id (sorted on p)"
+          },
+          {
+            "name": "convergent: partner, partner_side, members_reached, members_testable, tier_reach, tier_n, fold, p, q, n_pairs, members, evidence_best, best_pair_id (sorted on p)"
+          },
+          {
+            "name": "connectivity: members_in_tier, internal_pairs, expected_pairs, ratio, p_perm, n_perm, perm_median"
+          },
+          {
+            "name": "universe: rule (the pairs the tests count), pairs (their number)"
+          },
+          {
+            "name": "composition: table, rows, both_labelled, share"
+          }
+        ]
+      },
+      "ranked": true
+    },
+    {
+      "name": "ptm_igraph",
+      "tool": false,
+      "purpose": "Reported pairs as an undirected igraph graph: one edge per protein pair carrying its strongest site pair (gene level), or one edge per reported pair between a glycosite and a phosphosite (site level).",
+      "args": [
+        {
+          "name": "x",
+          "type": "data.frame or ptm_list",
+          "meaning": "the edge table of ptm_network (one or several stacked), rows of reported pairs, or a ptm_list (its internal pairs)"
+        },
+        {
+          "name": "level",
+          "type": "character(1)",
+          "default": "gene",
+          "enum": [
+            "gene",
+            "site"
+          ],
+          "meaning": "gene or site nodes"
+        }
+      ],
+      "returns": {
+        "type": "igraph graph with vertex attributes kind, gene, query, n_edges and edge attributes glyco_gene, phospho_gene, evidence, rho, k, n_site_pairs, anchored, sign, shadow_clean, self_coupling, glyco_site, phospho_site, pair_id",
+        "columns": []
+      }
+    },
+    {
+      "name": "ptm_plot_network",
+      "tool": false,
+      "purpose": "A static network drawing: edge width on evidence, dashed for a negative correlation, dotted for site pairs of both signs, orange with perturbation evidence; queried or listed proteins filled blue; the layout carries no meaning. A ptm_network table is drawn at the partners it marks drawn, and any input at its max_edges strongest links, each said in a message.",
+      "args": [
+        {
+          "name": "x",
+          "type": "data.frame, ptm_list or igraph",
+          "meaning": "as ptm_igraph, or a graph it returned"
+        },
+        {
+          "name": "level",
+          "type": "character(1)",
+          "default": "gene",
+          "enum": [
+            "gene",
+            "site"
+          ],
+          "meaning": "gene or site nodes"
+        },
+        {
+          "name": "layout",
+          "type": "function",
+          "default": "NULL",
+          "meaning": "an igraph layout function; force-directed by default"
+        },
+        {
+          "name": "label_cex",
+          "type": "numeric(1)",
+          "default": 0.8,
+          "meaning": "label size"
+        },
+        {
+          "name": "main",
+          "type": "character(1)",
+          "default": "NULL",
+          "meaning": "an optional title; none by default"
+        },
+        {
+          "name": "max_edges",
+          "type": "integer(1)",
+          "default": 100,
+          "meaning": "draw at most this many links, the strongest by evidence; NULL draws all. A ptm_network table is first cut to the partners it marks drawn (top_n)"
+        },
+        {
+          "name": "...",
+          "type": "dots",
+          "meaning": "passed to igraph's plot"
+        }
+      ],
+      "returns": {
+        "type": "the igraph graph, invisibly",
+        "columns": []
+      }
+    },
+    {
+      "name": "ptm_write_network",
+      "tool": false,
+      "purpose": "Node and edge tables (tab-separated, for Cytoscape's table import: from and to as source and target) or GraphML for a viewer.",
+      "args": [
+        {
+          "name": "x",
+          "type": "data.frame or ptm_list",
+          "meaning": "as ptm_igraph"
+        },
+        {
+          "name": "path",
+          "type": "character(1)",
+          "meaning": "the file stem: <path>_nodes.tsv and <path>_edges.tsv, or <path>.graphml"
+        },
+        {
+          "name": "level",
+          "type": "character(1)",
+          "default": "gene",
+          "enum": [
+            "gene",
+            "site"
+          ],
+          "meaning": "gene or site nodes"
+        },
+        {
+          "name": "format",
+          "type": "character(1)",
+          "default": "tsv",
+          "enum": [
+            "tsv",
+            "graphml"
+          ],
+          "meaning": "two tables, or GraphML through igraph"
+        }
+      ],
+      "returns": {
+        "type": "the paths written, invisibly",
+        "columns": []
+      }
+    },
+    {
+      "name": "ptm_tools",
+      "tool": false,
+      "purpose": "The package as tool descriptions for an agent framework, generated from this reference: one per function marked tool, with a JSON Schema for its arguments, the view's settings spelled out, and the conventions (call ptm_status first; a limit on every function that returns rows).",
+      "args": [
+        {
+          "name": "format",
+          "type": "character(1)",
+          "default": "mcp",
+          "enum": [
+            "mcp",
+            "anthropic",
+            "openai"
+          ],
+          "meaning": "the tool shape: Model Context Protocol (inputSchema), Anthropic (input_schema) or OpenAI (type function, parameters)"
+        },
+        {
+          "name": "as",
+          "type": "character(1)",
+          "default": "list",
+          "enum": [
+            "list",
+            "json"
+          ],
+          "meaning": "a list, or the JSON text a framework loads"
+        }
+      ],
+      "returns": {
+        "type": "a list of tool descriptions with an instructions attribute, or one JSON string",
+        "columns": []
+      }
+    }
+  ],
+  "columns": [
+    {
+      "name": "glyco_site",
+      "type": "string",
+      "in_shards": true,
+      "meaning": "the glycosite key GENE_N<canonical position>"
+    },
+    {
+      "name": "phospho_site",
+      "type": "string",
+      "in_shards": true,
+      "meaning": "the phosphosite key GENE_<residue><position as CPTAC labeled it>"
+    },
+    {
+      "name": "glyco_gene",
+      "type": "string",
+      "in_shards": true,
+      "meaning": "HGNC symbol of the glycosite's protein"
+    },
+    {
+      "name": "phospho_gene",
+      "type": "string",
+      "in_shards": true,
+      "meaning": "HGNC symbol of the phosphosite's protein"
+    },
+    {
+      "name": "is_cis",
+      "type": "bool",
+      "in_shards": true,
+      "meaning": "both sites on one gene"
+    },
+    {
+      "name": "rho_combined",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "the fixed-effect Fisher-z meta of the per-cohort partial Spearman correlations, each adjusted for its cohort's covariates, back-transformed"
+    },
+    {
+      "name": "evidence",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "-log10 two-sided pooled P; signed Student-to-normal weighted combination under student_normal_bh, legacy Fisher-normal in releases without the marker. The sole ranking."
+    },
+    {
+      "name": "k_cohorts",
+      "type": "int32",
+      "in_shards": true,
+      "meaning": "cohorts contributing to the meta"
+    },
+    {
+      "name": "n_total",
+      "type": "int32",
+      "in_shards": true,
+      "meaning": "added by the package: the tumors across the contributing cohorts, summed from cohorts_rho"
+    },
+    {
+      "name": "I2",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "between-cohort heterogeneity beyond sampling noise (share); NA at k = 1"
+    },
+    {
+      "name": "q_value",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "Benjamini-Hochberg adjustment over all scored site pairs, the only correction."
+    },
+    {
+      "name": "q_value_anchored",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "Benjamini-Hochberg adjustment over the perturbation-admitted subset of the scored site layer; NA off-family."
+    },
+    {
+      "name": "evidence_pctile_k",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "where the row's evidence sits among reported pairs measured in the same number of cohorts (0-1); a rank within the release"
+    },
+    {
+      "name": "anch_any",
+      "type": "bool",
+      "in_shards": true,
+      "meaning": "admitted by any perturbation channel"
+    },
+    {
+      "name": "anch_dose",
+      "type": "bool",
+      "in_shards": true,
+      "meaning": "the tunicamycin dose series: the glycosite, its glycan and the phosphosite measured together"
+    },
+    {
+      "name": "anch_gene_editing",
+      "type": "bool",
+      "in_shards": true,
+      "meaning": "glycosylation-enzyme knock-out and knock-in lines: each site responded on its own"
+    },
+    {
+      "name": "anch_enzymatic",
+      "type": "bool",
+      "in_shards": true,
+      "meaning": "sialidase treatment: each site responded on its own"
+    },
+    {
+      "name": "cohorts_rho",
+      "type": "string",
+      "in_shards": true,
+      "meaning": "the per-cohort breakdown packed as COHORT:rho:n;..."
+    },
+    {
+      "name": "rep_glycans",
+      "type": "string",
+      "in_shards": true,
+      "meaning": "the representative glycoform per cohort packed as COHORT:composition;... (the glycan seen in the most tumors of that cohort, never the best-correlated)"
+    },
+    {
+      "name": "n_rep_glycans",
+      "type": "int32",
+      "in_shards": true,
+      "meaning": "distinct representative compositions across the cohorts"
+    },
+    {
+      "name": "rho_prot",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "the two parent proteins' abundance correlation, the same estimator on the proteome"
+    },
+    {
+      "name": "evidence_prot",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "Legacy Fisher-normal -log10 P of the protein-shadow correlation; descriptive annotation, not Student-normal primary evidence or a q value. The shadow filter uses rho_prot only."
+    },
+    {
+      "name": "shadow_clean",
+      "type": "bool",
+      "in_shards": true,
+      "meaning": "not same-protein and |rho_prot| < 0.15"
+    },
+    {
+      "name": "self_glyco",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "the glycosite's correlation with its own protein's abundance (median over the pair's cohorts, on the glycoform the score used)"
+    },
+    {
+      "name": "self_phospho",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "the phosphosite's correlation with its own protein's abundance"
+    },
+    {
+      "name": "self_coupling",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "the larger of the two, in absolute value; the filter acts at 0.6, the cutoff of the candidate screen"
+    },
+    {
+      "name": "n_cohorts_self",
+      "type": "int32",
+      "in_shards": true,
+      "meaning": "cohorts behind the self-coupling medians"
+    },
+    {
+      "name": "glyco_programs",
+      "type": "string",
+      "in_shards": true,
+      "meaning": "tissue-program labels of the glycosite, attributed to glycoforms (composition=program(rho)|...)"
+    },
+    {
+      "name": "phospho_programs",
+      "type": "string",
+      "in_shards": true,
+      "meaning": "tissue-program labels of the phosphosite"
+    },
+    {
+      "name": "k_adjusted",
+      "type": "int32",
+      "in_shards": true,
+      "meaning": "cohorts in the composition-adjusted meta"
+    },
+    {
+      "name": "rho_adjusted",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "the composition-adjusted correlation: an annotation, never a ranking"
+    },
+    {
+      "name": "rho_adjusted_lo",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "lower bound of its 95 % interval"
+    },
+    {
+      "name": "rho_adjusted_hi",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "upper bound of its 95 % interval"
+    },
+    {
+      "name": "evidence_adjusted",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "-log10 P of the adjusted meta; never a sort key, no false-discovery rate"
+    },
+    {
+      "name": "adjusted_rank",
+      "type": "int32",
+      "in_shards": true,
+      "meaning": "the rank of evidence_adjusted among reported pairs, for display"
+    },
+    {
+      "name": "delta_abs_z_common",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "|z adjusted| - |z total| on the common mask"
+    },
+    {
+      "name": "sign_flip_common",
+      "type": "bool",
+      "in_shards": true,
+      "meaning": "the adjusted and total correlations differ in sign on the common mask"
+    },
+    {
+      "name": "rho_parent",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "sensitivity: the correlation conditioned on the cohort's covariates and the available parent proteins' abundance (one shared parent for same-protein pairs)"
+    },
+    {
+      "name": "evidence_parent",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "-log10 P of rho_parent; read as a sensitivity only"
+    },
+    {
+      "name": "k_parent",
+      "type": "int32",
+      "in_shards": true,
+      "meaning": "cohorts in the parent-conditioned meta"
+    },
+    {
+      "name": "rho_secretory",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "sensitivity: the correlation conditioned on the secretory-capacity score"
+    },
+    {
+      "name": "own_gene_excluded_any",
+      "type": "bool",
+      "in_shards": true,
+      "meaning": "a covariate panel contained one of the pair's own genes and it was dropped in at least one cohort"
+    },
+    {
+      "name": "evidence_loco_min",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "the lowest evidence that survives the removal of one cohort"
+    },
+    {
+      "name": "loco_pctile_k",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "the share of evidence kept without the costliest cohort, as a percentile among reported pairs with the same k"
+    },
+    {
+      "name": "rho_loco_lo",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "the smallest pooled rho over the leave-one-cohort-out removals"
+    },
+    {
+      "name": "rho_loco_hi",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "the largest pooled rho over the removals"
+    },
+    {
+      "name": "cohort_max_influence",
+      "type": "string",
+      "in_shards": true,
+      "meaning": "the cohort whose removal moves the estimate most"
+    },
+    {
+      "name": "glyco_row_id",
+      "type": "string",
+      "in_shards": false,
+      "meaning": "PTMG:<accession>:N<position>, the glycosite's stable identifier"
+    },
+    {
+      "name": "phospho_row_id",
+      "type": "string",
+      "in_shards": false,
+      "meaning": "PTMP:<accession>:<residue><canonical position>; NA where no canonical position exists"
+    },
+    {
+      "name": "pair_id",
+      "type": "string",
+      "in_shards": false,
+      "meaning": "glyco_row_id|phospho_row_id, the stable row identifier; NA when either side lacks an accession"
+    },
+    {
+      "name": "glyco_uniprot_acc",
+      "type": "string",
+      "in_shards": false,
+      "meaning": "the glycosite's UniProt accession"
+    },
+    {
+      "name": "phospho_uniprot_acc",
+      "type": "string",
+      "in_shards": false,
+      "meaning": "the phosphosite's UniProt accession"
+    },
+    {
+      "name": "phospho_position_canonical",
+      "type": "int32",
+      "in_shards": false,
+      "meaning": "the phosphosite's position on the UniProt canonical sequence"
+    },
+    {
+      "name": "glyco_site_ambiguous",
+      "type": "bool",
+      "in_shards": false,
+      "meaning": "the glycosite's peptide carried several sequons; the label names the first (in the shards, on the site record)"
+    },
+    {
+      "name": "anch_pair_observed",
+      "type": "bool",
+      "in_shards": false,
+      "meaning": "a channel observed the exact pair rather than its two ends"
+    },
+    {
+      "name": "p_combined",
+      "type": "double",
+      "in_shards": false,
+      "meaning": "the meta-analysis P"
+    },
+    {
+      "name": "log_p",
+      "type": "double",
+      "in_shards": false,
+      "meaning": "its natural log"
+    },
+    {
+      "name": "Q",
+      "type": "double",
+      "in_shards": false,
+      "meaning": "Cochran's Q; NA at k = 1"
+    },
+    {
+      "name": "I2_adjusted",
+      "type": "double",
+      "in_shards": false,
+      "meaning": "heterogeneity of the adjusted meta"
+    },
+    {
+      "name": "k_common",
+      "type": "int32",
+      "in_shards": false,
+      "meaning": "cohorts on the common mask of the two statistics"
+    },
+    {
+      "name": "zbar_total_common",
+      "type": "double",
+      "in_shards": false,
+      "meaning": "the total statistic's pooled z on the common mask"
+    },
+    {
+      "name": "zbar_adjusted_common",
+      "type": "double",
+      "in_shards": false,
+      "meaning": "the adjusted statistic's pooled z on the common mask"
+    },
+    {
+      "name": "rho_placebo",
+      "type": "double",
+      "in_shards": false,
+      "meaning": "the placebo adjustment (three random other-gene tracks) on the deterministic 10 % subset"
+    },
+    {
+      "name": "evidence_placebo",
+      "type": "double",
+      "in_shards": false,
+      "meaning": "-log10 P of rho_placebo"
+    },
+    {
+      "name": "evidence_secretory",
+      "type": "double",
+      "in_shards": false,
+      "meaning": "-log10 P of rho_secretory"
+    },
+    {
+      "name": "sum_weight",
+      "type": "double",
+      "in_shards": true,
+      "meaning": "Sum of cohort Fisher weights n-3-k_cov; supports the unchanged pooled effect estimate and its Fisher interval, not an inversion of the Student-normal P."
+    }
+  ],
+  "filters": [
+    {
+      "name": "include_cis",
+      "type": "logical(1)",
+      "default": "FALSE",
+      "meaning": "show same-protein pairs (hidden by default, counted in withheld as cis)"
+    },
+    {
+      "name": "min_k",
+      "type": "integer(1)",
+      "default": "2",
+      "meaning": "at least this many cohorts behind the pooled estimate"
+    },
+    {
+      "name": "hide_composition",
+      "type": "logical(1)",
+      "default": "FALSE",
+      "meaning": "drop pairs where both sites carry a tissue-composition program label"
+    },
+    {
+      "name": "anchored_only",
+      "type": "logical(1)",
+      "default": "FALSE",
+      "meaning": "keep only pairs with perturbation evidence"
+    },
+    {
+      "name": "significant_only",
+      "type": "logical(1)",
+      "default": "TRUE",
+      "meaning": "keep only pairs at q < 0.05 on the total score"
+    },
+    {
+      "name": "max_i2",
+      "type": "numeric(1)",
+      "default": "NA",
+      "meaning": "a ceiling on the heterogeneity statistic I2; single-cohort rows carry none and pass",
+      "nullable": true
+    },
+    {
+      "name": "adjusted_excludes_zero",
+      "type": "logical(1)",
+      "default": "FALSE",
+      "meaning": "keep only pairs whose composition-adjusted 95 percent interval excludes zero; a filter, never a sort"
+    },
+    {
+      "name": "shadow_clean_only",
+      "type": "logical(1)",
+      "default": "FALSE",
+      "meaning": "keep only pairs whose parent proteins do not co-vary (|rho_prot| < 0.15) and are not the same protein; pairs with no shadow measured are withheld"
+    },
+    {
+      "name": "hide_self_coupled",
+      "type": "logical(1)",
+      "default": "FALSE",
+      "meaning": "drop pairs whose stronger side tracks its own protein's abundance at |rho| >= 0.6; a pair with no value is kept"
+    },
+    {
+      "name": "min_loco_pctile",
+      "type": "numeric(1)",
+      "default": "NA",
+      "meaning": "a floor on loco_pctile_k, the percentile among pairs of the same cohort count of the evidence share kept without the most influential cohort; single-cohort pairs are withheld when set",
+      "nullable": true
+    }
+  ],
+  "tool_conventions": {
+    "call_first": "ptm_status",
+    "row_limit": {
+      "name": "limit",
+      "default": 25,
+      "meaning": "return at most this many rows from the top (the MCP server's cap: 25 unless given, at most 500; the full count is reported beside them)",
+      "max": 500
+    },
+    "rows_note": "Rows are sorted on evidence, the only ranking; read withheld (what the view hid, by reason) beside them and quote pair_id, never a row number.",
+    "instructions": "PTMlink ranks pairs of one N-glycosylation site and one phosphorylation site by the evidence that they co-vary across the release's CPTAC tumor cohorts, each correlation adjusted for its cohort's covariates (ptm_cohorts lists the cohorts; normal adjacent tissue (NAT) cohorts are view-only and never pooled). Read before calling: the correlation is symmetric and licenses no direction; site-pair results rank on the total score (evidence, -log10 P), and the adjusted, parent-conditioned and self-coupling columns are annotations that never sort and carry no false-discovery rate; perturbation evidence admits a pair and never raises its rank; the default view hides same-protein pairs, single-cohort pairs and pairs that are not significant at q < 0.05 (to see all three classes, set significant_only to false, min_k to 1 and include_cis to true, with other filters reset) and reports what it withheld. Call ptm_status first to learn how a symbol resolves and why a gene returns what it returns. Use ptm_explain to read the rules on a pair before stating anything about it. Quote pair_id, not row numbers, and cite the release from provenance. Read inference metadata: student_normal_bh uses Student tails and Benjamini-Hochberg q_value, the only correction; releases without the marker use Fisher-normal evidence with BH. List enrichment tables use their own statistics and count significant pairs (q < 0.05) between two different proteins only; their hypergeometric BH q values are a separate family. NAT estimates and cohort-against-background comparisons are website features, not returned by ptm_pair. The perturbation-subset q value is a separate family and changes neither the primary q value nor ranking.",
+    "default_words": {
+      "TRUE": "true",
+      "FALSE": "false",
+      "NA": "null, for no limit",
+      "character(0)": "none",
+      "list()": "none",
+      "ptm_default_filters()": "the default view"
+    }
+  }
+}

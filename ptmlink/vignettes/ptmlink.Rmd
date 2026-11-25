@@ -1,0 +1,368 @@
+---
+title: "Reading PTMlink from R"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Reading PTMlink from R}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+PTMlink ranks pairs of one N-glycosylation site and one phosphorylation site by the evidence that
+the two co-vary across the release's CPTAC tumor cohorts (`ptm_cohorts()` lists them and their
+role; normal tissue is never pooled). Perturbation evidence can admit a pair but never increases its
+score. The package does not refit the underlying tumor associations; it calculates interval summaries
+and list statistics. Normal adjacent tissue (NAT) estimates and cohort-against-background comparisons are website
+features, outside the current pair response.
+
+## The three data sources
+
+```{r}
+library(ptmlink)
+ptm_set_data_url("https://ptmlink.biomarkercenter.org/data")  # fetched on first use; every file is verified
+                                                # against SHA256SUMS.json and refused without it
+# optional, instead of the website: a local copy of the website's data directory (the one holding build.json)
+# ptm_set_data_dir("path/to/data")
+# optional, for whole-database questions: the Parquet release, available when the article is published
+# ptm_set_release_dir("path/to/release")
+```
+
+The per-gene data files answer one gene, site or pair at a time and need no more than `jsonlite`. The release
+directory answers questions over every reported pair through `arrow`, which is suggested, not
+required.
+
+## The first call
+
+`ptm_status()` says how a query resolved and why a gene returns what it returns. It works on the
+small index alone, so it is the right first call in a script or an agent tool.
+
+```{r}
+ptm_status(c("EGFR", "HER2", "P00533", "NOTAGENE"))
+```
+
+Its printed summary, for three of these queries:
+
+```
+EGFR
+  glycosites:   usable; detected in 9 cohorts, 11,220 reported pairs
+  phosphosites: usable; detected in 12 cohorts, 2,792 reported pairs
+ERBB2 (asked as HER2, alias)
+  glycosites:   usable; detected in 8 cohorts, 2,041 reported pairs
+  phosphosites: usable; detected in 12 cohorts, 1,046 reported pairs
+NOTAGENE: not a recognized symbol, alias or UniProt accession
+```
+
+## Ranked partners, the default view, what was withheld
+
+```{r}
+g <- ptm_gene("EGFR", "glyco")        # EGFR's glycosites against every phosphosite
+attr(g, "withheld")                   # rows the default view hid, by reason
+ptm_gene(c("EGFR", "TFRC"), "glyco")  # several genes, stacked with query_gene
+ptm_site("EGFR_T693")                 # the partners of one site
+```
+
+Printing `g` gives a summary; `g` itself is a data frame with every column:
+
+```
+EGFR glycosites: 8,579 pairs, sorted by evidence (PTMlink v1.0.0)
+Hidden by filters: 68 same-protein, 861 single-cohort, 1,712 not significant.
+
+  glyco_site  phospho_site     rho  evidence        q  cohorts  perturbation
+  EGFR_N352   PIEZO1_S1646    0.33      14.5  4.7e-12        7
+  EGFR_N352   VDAC2_S115      0.32      14.3  7.0e-12        8
+  EGFR_N352   SLC20A2_S256    0.33      13.7  2.0e-11        8
+  EGFR_N352   SYNPO2_S729    -0.30      13.3  5.2e-11        8
+  EGFR_N352   CANX_S554       0.36      12.2  4.7e-10        6
+  EGFR_N352   VDAC1_S104      0.29      11.9  8.2e-10        8
+  EGFR_N352   SEC61B_S13      0.32      11.7  1.4e-09        7
+  EGFR_N352   FAM234A_S21     0.29      11.4  2.4e-09        8
+  EGFR_N352   ADAMTSL3_S631  -0.35      11.3  2.6e-09        6
+  EGFR_N352   STIM1_S257      0.28      10.9  6.2e-09        8
+
+Showing 10 of 8,579.
+  more rows:    print(x, n = 50)
+  all columns:  View(x)
+  one pair:     ptm_pair("EGFR_N352", "PIEZO1_S1646")
+  filters:      ?ptm_default_filters
+```
+
+The default view hides same-protein pairs with their count, asks for at least two cohorts and keeps
+only pairs significant at q < 0.05 on the total score, as the website does. Change it with
+`filters = list(...)`, naming only the settings to change. To expose all reported rows, use
+`list(significant_only = FALSE, min_k = 1, include_cis = TRUE)`.
+Changing `significant_only` alone retains the cohort-count and same-protein filters. Site-pair rows
+are ranked by `evidence`; List enrichment tables use their own statistics.
+
+## Whole-database questions
+
+```{r}
+top <- ptm_query(list(list("q_value", "<", 1e-10), list("k_cohorts", ">=", 5)), limit = 100)
+attr(top, "provenance")               # release, file and checksum, the conditions, the filters, the time
+ptm_query(genes = c("EGFR", "TFRC"), columns = c("glyco_site", "phospho_site", "evidence"))
+ptm_query(list(list("anch_any", "==", TRUE), list("shadow_clean", "==", TRUE)))
+ptm_columns()                         # every column with its type and meaning
+```
+
+Conditions are pushed into the Parquet reader, so a query with narrow conditions returns in seconds. Every pair
+the conditions match is read into memory, so a query with no condition, or one that matches more than a million
+pairs, is refused unless `allow_full = TRUE`.
+
+## One pair, in full
+
+```{r}
+p <- ptm_pair("TFRC_N727", "COIL_T303")
+p$row$pair_id                         # the stable identifier
+ptm_pair("PTMG:P02786:N727|PTMP:P38432:T303")   # the same pair, named by its identifier
+p$cohorts                             # per-cohort rho, n and a 95 % interval
+p$rep_glycans                         # the glycoform each cohort's correlation was measured on
+p$glycoforms                          # every glycoform of the site scored against the phosphosite, its own q
+```
+
+A pair prints as its key numbers and its estimate in each cohort. For `ptm_pair("IL6ST_N131", "TMX1_S270")`:
+
+```
+IL6ST_N131 x TMX1_S270
+  pair id               PTMG:P40189:N131|PTMP:Q9H3N1:S270
+  pooled rho            0.23, 95% CI [0.14, 0.31]
+  evidence              5.9, q = 1.0e-04
+  cohorts               7, 469 tumors; I2 = 0.15
+  perturbation          tunicamycin dose response
+  parent proteins       rho -0.09
+  own-protein coupling  0.42
+  adjusted 95% CI       [0.09, 0.28] (an annotation; never used to rank)
+
+  cohort   rho         95% CI  tumors
+  BRCA    0.38  [-0.01, 0.67]      27
+  ccRCC   0.10  [-0.11, 0.30]      91
+  HNSCC   0.15  [-0.05, 0.34]      95
+  LSCC    0.23  [-0.01, 0.45]      67
+  LUAD    0.19  [-0.01, 0.39]      92
+  PDAC    0.51   [0.21, 0.72]      35
+  GC      0.34   [0.10, 0.54]      62
+
+  cautions:      ptm_explain("IL6ST_N131", "TMX1_S270")
+  glycoforms:    x$glycoforms
+  cohort table:  x$cohorts
+  all columns:   x$row
+```
+
+## Inspecting a result visually
+
+In RStudio, `View(p$cohorts)` opens the estimates as a table. The installed example draws the intervals
+already returned by the reader; it does not recompute the association.
+
+```{r}
+p <- ptm_pair("IL6ST_N131", "TMX1_S270")
+source(system.file("examples", "inspect_pair.R", package = "ptmlink"))
+plot_pair_cohorts(p)
+```
+
+For a gene-level view, `ptm_plot_network(ptm_network("EGFR", top_n = 15))` draws EGFR with its 15 strongest
+partners as an undirected association network (requires `igraph`). The network export examples below create
+files for Cytoscape.
+
+## The reading rules as data
+
+```{r}
+e <- ptm_explain("TFRC_N727", "COIL_T303")
+e[e$applies %in% TRUE, c("rule", "value", "threshold", "statement")]
+ptm_explain(rows = head(g, 5))        # on rows already in hand, nothing fetched
+```
+
+Printed, the rules read as sentences. For `ptm_explain("IL6ST_N131", "TMX1_S270")`:
+
+```
+IL6ST_N131 x TMX1_S270
+Applies:
+  - Co-variation only: neither site is shown to regulate the other.
+  - Significant after Benjamini-Hochberg correction: q = 1.0e-04; evidence 5.9
+    over 7 cohorts and 469 tumors.
+  - Perturbation support, which admits a pair but never raises its rank.
+    Channels: dose-response (the pair was measured together).
+  - The program-adjusted 95% interval excludes zero (an annotation, never a
+    ranking). Adjusted interval [0.09, 0.28].
+Context:
+  - This pair is in the top 2.4% of all scored site pairs measured in 7
+    cohorts.
+  - Without its most influential cohort (ccRCC), the pair keeps a larger share
+    of its evidence than 99% of reported pairs measured in 7 cohorts.
+Does not apply: same protein, parent-protein co-variation, self coupling,
+  tissue composition, heterogeneity, one cohort, glycoform pooling,
+  sequon ambiguity.
+
+  full wording:  x$statement
+```
+
+Each row of the result is one rule on one pair: the column it reads, the threshold it is judged
+against, whether it applies, and the sentence the website would show. The thresholds come from the
+package reference, the one file that also drives the Python reader.
+
+## Sites and where they sit
+
+```{r}
+s <- ptm_sites("EGFR")
+s[, c("side", "site", "row_id", "position_canonical", "plddt", "residue_matches_model")]
+```
+
+Positions are on the UniProt canonical sequence, counted from the initiator methionine, the same
+numbering the AlphaFold model uses. Coordinates are the alpha carbon in that model and pLDDT is the
+model's own confidence; a distance between two sites is a fact about the model, never about coupling.
+
+## The network of a gene
+
+```{r}
+net <- ptm_network("EGFR")
+head(net[net$drawn, c("partner", "role", "n_site_pairs", "evidence_best", "rho_at_best")])
+```
+
+## A list of proteins or sites
+
+`ptm_list()` takes a list from a differential analysis and answers, above all, which sites on the
+other side of the pairs the list correlates with. Its level is `protein` when every entry is a gene.
+When any entry is a site key the level is `site`: gene entries are expanded to their reported sites and
+site entries stay as given. `level = "protein"` makes every site key contribute its protein instead. It returns `members` (how each entry resolved and is covered), `internal` (reported pairs
+with a member on both sides and two different proteins),
+`same_protein`, `neighbourhood` (a member on one side; the site on the other side is a partner site),
+`partner_sites` (sites outside the list reached by more members than their reach among all significant pairs
+predicts: of the N units on the members' side of the significant pairs the site pairs with K, the list holds n and
+the site reaches x; a hypergeometric P per site, BH over all of them, the fold, the members reached
+and the strongest pair in the view), `convergent` (the same test per partner protein), and
+`connectivity` (significant pairs within the list against the number expected from the members' own numbers
+of significant pairs, with a permutation P from degree-matched random lists). The row tables obey the
+view. The three tests count the significant reported pairs (q < 0.05) between two different proteins; a pair
+reported only for its perturbation support is not counted. `composition` says what share of each table is
+labeled with a tissue-composition program on both sides, which a tumor-versus-normal list is
+expected to be rich in.
+
+```{r}
+l <- ptm_list(c("EGFR", "ERBB2", "MET", "ITGB1", "CD44", "TFRC_N727"))
+l                                           # the summary
+l$members                                   # resolution, coverage, the named site
+head(l$partner_sites)                       # site, protein, side, members reached, reach among reported pairs, fold, p, q, the best pair
+head(l$convergent)                          # the same per partner protein
+l$connectivity                              # observed, expected, ratio, permutation P
+ptm_list(c("MAPK1_T185", "MAPK1_Y187", "STAT3_Y705"))   # a phosphosite list: the glycosites it converges on
+```
+
+The summary that `l` prints:
+
+```
+List of 79 sites against the reported pairs (PTMlink v1.0.0)
+Pairs in view: 40 within the list, 63,451 with a partner outside it.
+Hidden by filters: 93 same-protein, 2,971 single-cohort,
+  10,978 not significant.
+Read at site level: 5 gene entries expanded to reported sites.
+
+Members
+  entry      protein  reported pairs  within list  outside list
+  EGFR       EGFR             14,012           17         9,765
+  ERBB2      ERBB2             3,087           11         2,078
+  MET        MET               3,126            5         1,456
+  ITGB1      ITGB1            34,399           21        28,809
+  CD44       CD44              9,553           17         8,443
+  TFRC_N727  TFRC             13,534            9        12,900
+
+Connectivity among the members
+  41 significant pairs within the list; 39.2 expected from the members' own
+    pair counts (1.05 times as many). Permutation P = 0.368 over 200 random
+    lists.
+
+Partner sites reached by more members than expected
+  site         side      members  fold      q  best evidence
+  LAMB3_N810   glyco     9 of 53   9.0  0.010            5.6
+  ITGA3_N605   glyco    14 of 53   4.8  0.010           11.6
+  PHLDA2_S42   phospho   9 of 25   7.3  0.010            9.4
+  PTPN11_Y62   phospho   8 of 25   8.9  0.010            5.4
+  ADAM17_T735  phospho  11 of 25   4.5  0.039            5.3
+  Top 5 by P of 15,738 reached by two or more members (28,409 reached in all);
+    7 at q < 0.05.
+
+Partner proteins reached by more members than expected
+  protein  side      members  fold      q  best evidence
+  PHLDA2   phospho  10 of 25   5.4  0.038            9.4
+  LHPP     phospho   4 of 25  22.2  0.061            3.8
+  ITGB6    glyco    14 of 53   3.5  0.061            7.2
+  CSTB     phospho   6 of 25   8.5  0.073            5.0
+  MUL1     phospho  12 of 25   3.4  0.073            6.6
+  Top 5 by P of 5,791 reached by two or more members (7,237 reached in all); 1
+    at q < 0.05.
+
+The three tests count 6,642,419 significant pairs (q < 0.05) between two
+  different proteins.
+
+  members:           x$members
+  pairs within:      x$internal
+  pairs outside:     x$neighbourhood
+  partner sites:     x$partner_sites
+  partner proteins:  x$convergent
+  plot:              ptm_plot_network(x)
+```
+
+An entry is a token: a pasted list is split on newlines, commas, semicolons and whitespace, and a
+data.frame is read as entries in its first column. The tests say a site or
+protein is reached by more members, or the list is more connected, than the members' degrees
+predict. They say nothing about mechanism, kinases or pathways; the release carries none of those.
+The website's List page runs the same two partner tests in the browser on the same significant pairs.
+On the v1.0.0 release a list takes about 30 seconds and 7 GB of memory, and a query with narrow conditions about
+10 seconds and a few GB. A query reads every pair its conditions match before the view and `limit` apply, so one
+that matches more than a million pairs is refused unless `allow_full = TRUE`.
+
+## Drawing and exporting a network
+
+```{r}
+g <- ptm_igraph(net)                                  # an undirected igraph graph, one edge per protein pair
+ptm_plot_network(net)                                 # the partners marked drawn: width on evidence, orange with perturbation evidence, dashed when negative
+ptm_plot_network(ptm_gene("EGFR", "glyco")[1:25, ], level = "site")
+ptm_plot_network(l)                                   # a list's internal pairs
+ptm_write_network(net, "egfr_network")                # egfr_network_nodes.tsv and _edges.tsv, for Cytoscape
+ptm_write_network(l, "list_network", format = "graphml")
+```
+
+The graph is undirected because the statistic is symmetric; an edge at the gene level carries its
+strongest site pair, as the website's network does. The layout carries no meaning.
+
+## For agents
+
+`ptm_tools()` turns the reference into tool descriptions: one per function marked as a tool, with a
+JSON Schema for the arguments, the view's settings spelled out, and a `limit` on every function that
+returns rows. Three shapes: Model Context Protocol, Anthropic and OpenAI. The repository's
+`python/ptmlink_mcp.py` serves the same tools over stdio from the same file.
+
+```{r}
+t <- ptm_tools()                      # a list; attr(t, "instructions") is the release contract
+cat(ptm_tools("openai", as = "json"))
+```
+
+## Reference and citation
+
+```{r}
+ptm_reference()$rules                 # the reading rules with their thresholds
+ptm_reference(as = "json")            # the same as text, for a tool-description loader
+ptm_cite()                            # the resource, its version and address
+citation("ptmlink")
+```
+
+## What no function will do
+
+Sort on the adjusted score, the parent-conditioned score or self-coupling; attach a
+false-discovery rate to an adjusted column; let perturbation evidence raise a rank; state a
+direction. Those are the release's rules, and the package holds to them.
+
+## Reproducing the manuscript candidate screen
+
+The full Parquet release and the complete candidate tables accompany the article. The installed example
+uses the exact conjunction, including own-protein coupling below 0.6 on both sites, neither site labeled,
+non-missing numerical fields, and retained-evidence percentile strictly above 0.5.
+
+```{r}
+source(system.file("examples", "candidate_screen.R", package = "ptmlink"))
+rows <- arrow::read_parquet("path/to/release/site_served.parquet", col_select = tidyselect::all_of(candidate_columns))
+candidates <- candidate_screen(rows)
+perturbation_candidates <- candidates[candidates$anch_any %in% TRUE, ]
+```
+
+The screen does not exclude residual confounding or establish a mechanism; adjusted intervals have
+no family-wide multiplicity correction.
